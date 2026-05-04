@@ -1,7 +1,5 @@
 package FreelanceOS.ProjectManagement.DTO;
 
-import FreelanceOS.ProjectManagement.Entity.ProjectStage;
-import FreelanceOS.ProjectManagement.Enums.ProjectStatus;
 import FreelanceOS.ProjectManagement.Enums.ProjectType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

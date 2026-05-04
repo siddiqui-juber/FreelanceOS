@@ -6,45 +6,50 @@ import FreelanceOS.ClientManagement.Entity.Client;
 import FreelanceOS.ClientManagement.Repository.ClientRepository;
 import FreelanceOS.ClientManagement.enums.ClientStatus;
 import FreelanceOS.ClientManagement.enums.ClientType;
-import FreelanceOS.SecurityConfig.JwtUtil;
+import FreelanceOS.Invoicing.Repository.InvoiceLineItemRepository;
+import FreelanceOS.Invoicing.Repository.InvoiceRepository;
+import FreelanceOS.ProjectManagement.Enums.ProjectStatus;
+import FreelanceOS.ProjectManagement.Repository.ProjectRepository;
 import FreelanceOS.User.Entity.User;
 import FreelanceOS.User.Repository.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-
+import org.springframework.web.server.ResponseStatusException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+
 
 @Service
 public class ClientService {
 
     private final ClientRepository clientRepository;
+    private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
-    private final JwtUtil jwtUtil;
-
+    private final InvoiceLineItemRepository invoiceLineItemRepository;
 
     public ClientService(ClientRepository clientRepository,
                          UserRepository userRepository,
-                         JwtUtil jwtUtil
-                        ){
+                         ProjectRepository projectRepository,
+                         InvoiceLineItemRepository invoiceLineItemRepository) {
         this.clientRepository = clientRepository;
         this.userRepository = userRepository;
-        this.jwtUtil = jwtUtil;
-
+        this.projectRepository = projectRepository;
+        this.invoiceLineItemRepository=invoiceLineItemRepository;
     }
 
-
-    // CREATE CLIENT
-
-    public ClientResponse createClient(String token, CreateClientRequest request){
-
-        UUID userId = jwtUtil.extractUserId(token);
+    //  CREATE
+    public ClientResponse createClient(UUID userId, CreateClientRequest request){
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User Not Found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"
+                ));
 
         if (clientRepository.existsByEmailAndUserId(request.getEmail(), userId)) {
-            throw new RuntimeException("Email already exists");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Email already exists"
+            );
         }
 
         Client client = new Client();
@@ -67,15 +72,11 @@ public class ClientService {
         return mapToResponse(saved);
     }
 
-
-    // GET ALL CLIENTS
-
-    public List<ClientResponse> getClients(String token,
+    //GET ALL
+    public List<ClientResponse> getClients(UUID userId,
                                            ClientStatus status,
                                            ClientType clientType,
                                            String sortBy){
-
-        UUID userId = jwtUtil.extractUserId(token);
 
         List<Client> clients = clientRepository.findByUserId(userId);
 
@@ -85,13 +86,13 @@ public class ClientService {
                     .toList();
         }
 
-        if(clientType != null){
+        if (clientType != null){
             clients = clients.stream()
                     .filter(c -> c.getClientType() == clientType)
                     .toList();
         }
 
-        if("name".equalsIgnoreCase(sortBy)){
+        if ("name".equalsIgnoreCase(sortBy)){
             clients.sort(Comparator.comparing(Client::getClientName));
         } else if ("created_at".equalsIgnoreCase(sortBy)) {
             clients.sort(Comparator.comparing(Client::getCreatedAt));
@@ -102,28 +103,24 @@ public class ClientService {
                 .toList();
     }
 
-
-    // GET CLIENT BY ID
-
-    public ClientResponse getClientById(String token, UUID clientId){
-
-        UUID userId = jwtUtil.extractUserId(token);
+    // ================= GET BY ID =================
+    public ClientResponse getClientById(UUID userId, UUID clientId){
 
         Client client = clientRepository.findByIdAndUserId(clientId, userId)
-                .orElseThrow(() -> new RuntimeException("Client not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Client not found"
+                ));
 
         return mapToResponse(client);
     }
 
-
-    // UPDATE CLIENT
-
-    public ClientResponse updateClient(String token, UUID clientId, CreateClientRequest request){
-
-        UUID userId = jwtUtil.extractUserId(token);
+    //  UPDATE
+    public ClientResponse updateClient(UUID userId, UUID clientId, CreateClientRequest request){
 
         Client client = clientRepository.findByIdAndUserId(clientId, userId)
-                .orElseThrow(() -> new RuntimeException("Client not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Client not found"
+                ));
 
         client.setClientName(request.getClientName());
         client.setCompanyName(request.getCompanyName());
@@ -141,19 +138,18 @@ public class ClientService {
         return mapToResponse(updated);
     }
 
-
-    // DELETE CLIENT
-
-  /*  public void deleteClient(String token, UUID clientId) {
-
-        UUID userId = jwtUtil.extractUserId(token);
+    //  DELETE
+    public void deleteClient(UUID userId, UUID clientId) {
 
         Client client = clientRepository.findByIdAndUserId(clientId, userId)
-                .orElseThrow(() -> new RuntimeException("Client not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Client not found"
+                ));
 
         boolean hasActiveProjects =
-                projectRepository.existsByClientIdAndStatusNotIn(
+                projectRepository.existsByClient_IdAndClient_UserIdAndStatusNotIn(
                         clientId,
+                        userId,
                         List.of(ProjectStatus.COMPLETED, ProjectStatus.CANCELLED)
                 );
 
@@ -166,30 +162,9 @@ public class ClientService {
 
         clientRepository.delete(client);
     }
-*/
-  public void deleteClient(String token,UUID clientId) {
-      UUID userId = jwtUtil.extractUserId(token);
 
-      Client client = clientRepository.findByIdAndUserId(clientId, userId)
-              .orElseThrow(() -> new RuntimeException("client not Foubd")
-              );
-      boolean hasActiveProjects = false;
-      if (hasActiveProjects) {
-          throw new RuntimeException("Client has active projects");
-      }
-
-      clientRepository.delete(client);
-  }
-
-
-
-    // MAPPING METHOD
-
-    private ClientResponse mapToResponse(Client client)
-    {
-        long totalProjects = 0;
-        long activeProjects = 0;
-        double totalRevenue = 0.0;
+    //  MAPPER
+    private ClientResponse mapToResponse(Client client) {
 
         ClientResponse response = new ClientResponse();
 
@@ -201,10 +176,20 @@ public class ClientService {
         response.setStatus(
                 client.getStatus() != null ? client.getStatus().name() : null
         );
-        response.setTotalProjects(totalProjects);
-        response.setActiveProjects(activeProjects);
-        response.setTotalRevenue(totalRevenue);
-        return response;
 
+        long totalProjects = projectRepository.countByClientId(client.getId());
+
+        long activeProjects = projectRepository
+                .countByClientIdAndStatus(client.getId(), ProjectStatus.ACTIVE);
+
+        double totalRevenue = invoiceLineItemRepository
+                .getTotalRevenueByClient(client.getId())
+                .doubleValue();
+
+        response.setTotalProjects((int) totalProjects);
+        response.setActiveProjects((int) activeProjects);
+        response.setTotalRevenue(totalRevenue);
+
+        return response;
     }
 }

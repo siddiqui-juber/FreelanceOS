@@ -18,12 +18,13 @@ public class Project {
 
     @Id
     @GeneratedValue
+    @Column(nullable = false)
     private UUID id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     private Client client;
 
-    private String ProjectName;
+    private String projectName;
 
     @Enumerated(EnumType.STRING)
     private ProjectType projectType;
@@ -38,4 +39,10 @@ public class Project {
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL)
     private List<ProjectStage> stages;
 
+    @PrePersist
+    public void onCreate() {
+        this.createdAt = LocalDateTime.now();
+    }
+
 }
+

@@ -1,4 +1,4 @@
-package FreelanceOS.SecurityConfig;
+package FreelanceOS.Security;
 
 
 import io.jsonwebtoken.Claims;

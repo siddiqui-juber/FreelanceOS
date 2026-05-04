@@ -1,45 +1,43 @@
 package FreelanceOS.User.Service;
 
-import FreelanceOS.SecurityConfig.JwtUtil;
+
 import FreelanceOS.User.Dto.ChangePasswordRequest;
 import FreelanceOS.User.Dto.UpdateUserRequest;
 import FreelanceOS.User.Dto.UserResponse;
 import FreelanceOS.User.Entity.User;
 import FreelanceOS.User.Repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
+
+
+
 @Service
 public class UserService {
 
-    @Autowired
     private final UserRepository userRepository;
-
-    @Autowired
-    private final JwtUtil jwtUtil;
-
-    @Autowired
     private final BCryptPasswordEncoder passwordEncoder;
 
     public UserService(UserRepository userRepository,
-                       JwtUtil jwtUtil,
-                       BCryptPasswordEncoder passwordEncoder){
-        this.userRepository=userRepository;
-        this.jwtUtil=jwtUtil;
-        this.passwordEncoder= passwordEncoder;
+                       BCryptPasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
-    public UserResponse getCurrentUser(String token) {
-        UUID userId = jwtUtil.extractUserId(token);
+
+    // GET CURRENT USER
+    public UserResponse getCurrentUser(UUID userId) {
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
         return mapToResponse(user);
     }
 
-    public UserResponse updateProfile(String token, UpdateUserRequest request) {
-        UUID userId = jwtUtil.extractUserId(token);
+    // UPDATE PROFILE
+    public UserResponse updateProfile(UUID userId, UpdateUserRequest request) {
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -55,9 +53,9 @@ public class UserService {
         return mapToResponse(user);
     }
 
-    public void changePassword(String token, ChangePasswordRequest request) {
+    //  CHANGE PASSWORD
+    public void changePassword(UUID userId, ChangePasswordRequest request) {
 
-        UUID userId = jwtUtil.extractUserId(token);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -65,12 +63,14 @@ public class UserService {
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
             throw new RuntimeException("Invalid current password");
         }
+
         // set new password
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
 
         userRepository.save(user);
     }
 
+    // MAPPER
     private UserResponse mapToResponse(User user) {
 
         UserResponse response = new UserResponse();
@@ -86,10 +86,4 @@ public class UserService {
 
         return response;
     }
-
-
-
-
-
-
 }

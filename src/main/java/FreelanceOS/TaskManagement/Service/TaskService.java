@@ -10,8 +10,9 @@ import FreelanceOS.TaskManagement.Enums.TaskStatus;
 import FreelanceOS.ProjectManagement.Repository.ProjectRepository;
 import FreelanceOS.ProjectManagement.Repository.ProjectStageRepository;
 import FreelanceOS.TaskManagement.Repository.TaskRepository;
-import FreelanceOS.SecurityConfig.JwtUtil;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,32 +25,36 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final ProjectStageRepository stageRepository;
-    private final JwtUtil jwtUtil;
 
     public TaskService(TaskRepository taskRepository,
                        ProjectRepository projectRepository,
-                       ProjectStageRepository stageRepository,
-                       JwtUtil jwtUtil) {
+                       ProjectStageRepository stageRepository) {
         this.taskRepository = taskRepository;
         this.projectRepository = projectRepository;
         this.stageRepository = stageRepository;
-        this.jwtUtil = jwtUtil;
     }
 
-
-    // CREATE TASK
-
-    public TaskResponse createTask(String token, UUID projectId, CreateTaskRequest request){
-
-        UUID userId = jwtUtil.extractUserId(token);
+    // CREATE
+    public TaskResponse createTask(UUID userId, UUID projectId, CreateTaskRequest request){
 
         Project project = projectRepository
                 .findByIdAndClient_UserId(projectId, userId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Project not found"
+                ));
 
         ProjectStage stage = stageRepository
                 .findById(request.getStageId())
-                .orElseThrow(() -> new RuntimeException("Stage not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Stage not found"
+                ));
+
+        // IMPORTANT: stage must belong to project
+        if (!stage.getProject().getId().equals(projectId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Stage does not belong to this project"
+            );
+        }
 
         ProjectTask task = new ProjectTask();
         task.setProject(project);
@@ -64,20 +69,18 @@ public class TaskService {
         return map(taskRepository.save(task));
     }
 
-
-    // GET TASKS
-
+    //  GET
     public List<TaskResponse> getTasks(
-            String token,
+            UUID userId,
             UUID projectId,
             UUID stageId,
             TaskStatus status){
 
-        UUID userId = jwtUtil.extractUserId(token);
-
         projectRepository
                 .findByIdAndClient_UserId(projectId, userId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Project not found"
+                ));
 
         List<ProjectTask> tasks;
 
@@ -92,30 +95,24 @@ public class TaskService {
         return tasks.stream().map(this::map).toList();
     }
 
-
-    // UPDATE TASK
-
+    //  UPDATE
     public TaskResponse updateTask(
-            String token,
+            UUID userId,
             UUID projectId,
             UUID taskId,
             UpdateTaskRequest request){
 
-        UUID userId = jwtUtil.extractUserId(token);
-
-        ProjectTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
-
-        if (!task.getProject().getClient().getUser().getId().equals(userId)) {
-            throw new RuntimeException("Unauthorized");
-        }
+        ProjectTask task = taskRepository
+                .findByIdAndProject_Client_UserId(taskId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Task not found"
+                ));
 
         task.setTaskTitle(request.getTaskTitle());
         task.setDescription(request.getDescription());
         task.setPriority(request.getPriority());
         task.setDueDate(request.getDueDate());
 
-        // 🔥 IMPORTANT LOGIC
         if (request.getStatus() != null) {
             task.setStatus(request.getStatus());
 
@@ -129,26 +126,19 @@ public class TaskService {
         return map(taskRepository.save(task));
     }
 
+    //  DELETE
+    public void deleteTask(UUID userId, UUID projectId, UUID taskId){
 
-    // DELETE TASK
-
-    public void deleteTask(String token, UUID projectId, UUID taskId){
-
-        UUID userId = jwtUtil.extractUserId(token);
-
-        ProjectTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
-
-        if (!task.getProject().getClient().getUser().getId().equals(userId)) {
-            throw new RuntimeException("Unauthorized");
-        }
+        ProjectTask task = taskRepository
+                .findByIdAndProject_Client_UserId(taskId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Task not found"
+                ));
 
         taskRepository.delete(task);
     }
 
-
-    // MAPPER
-
+    //  MAPPER
     private TaskResponse map(ProjectTask task){
 
         TaskResponse r = new TaskResponse();

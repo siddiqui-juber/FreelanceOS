@@ -1,13 +1,12 @@
 package FreelanceOS.ClientManagement.Service;
 
-
 import FreelanceOS.ClientManagement.DTO.CommunicationResponse;
 import FreelanceOS.ClientManagement.DTO.CreateCommunicationRequest;
 import FreelanceOS.ClientManagement.Entity.Client;
 import FreelanceOS.ClientManagement.Entity.ClientCommunication;
 import FreelanceOS.ClientManagement.Repository.ClientCommunicationRepository;
 import FreelanceOS.ClientManagement.Repository.ClientRepository;
-import FreelanceOS.SecurityConfig.JwtUtil;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -20,27 +19,29 @@ public class ClientCommunicationService {
 
     private final ClientCommunicationRepository communicationRepository;
     private final ClientRepository clientRepository;
-    private final JwtUtil jwtUtil;
 
     public ClientCommunicationService(ClientRepository clientRepository,
-                                      ClientCommunicationRepository communicationRepository,
-                                      JwtUtil jwtUtil){
-        this.communicationRepository=communicationRepository;
-        this.clientRepository=clientRepository;
-        this.jwtUtil=jwtUtil;
+                                      ClientCommunicationRepository communicationRepository) {
+        this.communicationRepository = communicationRepository;
+        this.clientRepository = clientRepository;
     }
 
-    public CommunicationResponse addCommunication(String token,
+    // CREATE
+    public CommunicationResponse addCommunication(UUID userId,
                                                   UUID clientId,
-                                                   CreateCommunicationRequest request){
-        UUID userId = jwtUtil.extractUserId(token);
+                                                  CreateCommunicationRequest request){
 
-        Client client = clientRepository.findByIdAndUserId(clientId,userId)
-                .orElseThrow(()-> new RuntimeException("client not found"));
+        Client client = clientRepository.findByIdAndUserId(clientId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Client not found"
+                ));
 
-        if (request.getCommunicationType()== null){
-            throw new RuntimeException("Communication type is required");
+        if (request.getCommunicationType() == null){
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Communication type is required"
+            );
         }
+
         ClientCommunication comm = new ClientCommunication();
         comm.setClient(client);
         comm.setCommunicationType(request.getCommunicationType());
@@ -50,18 +51,41 @@ public class ClientCommunicationService {
 
         return mapToResponse(communicationRepository.save(comm));
     }
-    public List<CommunicationResponse> getCommunication(String token,UUID clientId){
-        UUID userId = jwtUtil.extractUserId(token);
 
-        Client client =clientRepository.findByIdAndUserId(clientId,userId)
-                .orElseThrow(()-> new RuntimeException("client not found"));
+    //  GET
+    public List<CommunicationResponse> getCommunication(UUID userId, UUID clientId){
+
+        Client client = clientRepository.findByIdAndUserId(clientId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Client not found"
+                ));
+
         return communicationRepository
                 .findByClientIdOrderByCommunicationDateDesc(client.getId())
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
-    public CommunicationResponse mapToResponse(ClientCommunication comm){
+
+    // DELETE
+    public void deleteCommunication(UUID userId, UUID clientId, UUID commId) {
+
+        Client client = clientRepository.findByIdAndUserId(clientId, userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Client not found"
+                ));
+
+        ClientCommunication comm = communicationRepository
+                .findByIdAndClientId(commId, client.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Communication not found"
+                ));
+
+        communicationRepository.delete(comm);
+    }
+
+    //  MAPPER
+    private CommunicationResponse mapToResponse(ClientCommunication comm){
 
         CommunicationResponse res = new CommunicationResponse();
         res.setId(comm.getId());
@@ -72,20 +96,4 @@ public class ClientCommunicationService {
 
         return res;
     }
-
-    public void deleteCommunication(String token, UUID id, UUID commId) {
-
-        UUID userId = jwtUtil.extractUserId(token);
-
-        Client client = clientRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"user not found"));
-
-        ClientCommunication comm = communicationRepository
-                .findByIdAndClientId(commId, client.getId())
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Communication not found")
-                );
-        communicationRepository.delete(comm);
-    }
-
 }

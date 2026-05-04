@@ -27,5 +27,7 @@ public class ProjectResponse {
 
     private LocalDateTime createdAt;
 
-    private List<ProjectStageResponse> stages;
+   // private List<ProjectStageResponse> stages;
+    private String currentStageName;
+    private String currentStageStatus;
 }

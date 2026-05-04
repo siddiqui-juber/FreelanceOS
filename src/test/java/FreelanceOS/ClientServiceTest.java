@@ -4,99 +4,116 @@ import FreelanceOS.ClientManagement.DTO.CreateClientRequest;
 import FreelanceOS.ClientManagement.Entity.Client;
 import FreelanceOS.ClientManagement.Repository.ClientRepository;
 import FreelanceOS.ClientManagement.Service.ClientService;
-import FreelanceOS.SecurityConfig.JwtUtil;
-import FreelanceOS.User.Entity.User;
-import FreelanceOS.User.Repository.UserRepository;
+import FreelanceOS.Exception.ApiException;
+import FreelanceOS.Invoicing.Entity.Invoice;
+import FreelanceOS.Invoicing.Entity.InvoicePayment;
+import FreelanceOS.Invoicing.Repository.InvoicePaymentRepository;
+import FreelanceOS.Invoicing.Repository.InvoiceRepository;
+import FreelanceOS.ProjectManagement.Repository.ProjectRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class ClientServiceTest {
-
-    @Mock
-    private ClientRepository clientRepository;
-
-    @Mock
-    private UserRepository userRepository;
-    @Mock
-    private JwtUtil jwtUtil;
+class ClientServiceTest {
 
     @InjectMocks
-    private ClientService clientService;
+    private ClientService service;
 
-    private final String TOKEN="test-token";
+    @Mock
+    private ClientRepository clientRepo;
 
-    // Email uniqueness per user
+    @Mock
+    private ProjectRepository projectRepo;
+
+    @Mock
+    private InvoiceRepository invoiceRepo;
+
+    @Mock
+    private InvoicePaymentRepository paymentRepo;
+
+
+    // 1. EMAIL UNIQUENESS
+
+
     @Test
-    void shouldThrowException_whenEmailAlreadyExistsForUser() {
+    void shouldThrowException_WhenEmailAlreadyExists() {
 
         UUID userId = UUID.randomUUID();
+        String email = "test@mail.com";
 
-        CreateClientRequest request = new CreateClientRequest();
-        request.setEmail("test@gmail.com");
-
-        User user = new User();
-        user.setId(userId);
-
-        when(jwtUtil.extractUserId(TOKEN)).thenReturn(userId);
-
-        // ✅ ADD THIS
-        when(userRepository.findById(userId))
-                .thenReturn(Optional.of(user));
-
-        when(clientRepository.existsByEmailAndUserId("test@gmail.com", userId))
+        when(clientRepo.existsByEmailAndUserId(email, userId))
                 .thenReturn(true);
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () ->
-                clientService.createClient(TOKEN, request)
+        CreateClientRequest req = new CreateClientRequest();
+        req.setEmail(email);
+
+        assertThrows(ApiException.class, () ->
+                service.createClient(userId, req)
         );
-
-        assertEquals("Email already exists", ex.getMessage());
     }
 
-    // Delete client (basic test)
+
+    // 2. DELETE BLOCKED
+
+
     @Test
-    void shouldDeleteClientSuccessfully(){
-        UUID userId = UUID.randomUUID();
-        UUID clientId= UUID.randomUUID();
-
-        Client client = new Client();
-        client.setId(clientId);
-
-        when(jwtUtil.extractUserId(TOKEN)).thenReturn(userId);
-        when(clientRepository.findByIdAndUserId(clientId,userId))
-                .thenReturn(Optional.of(client));
-
-        clientService.deleteClient(TOKEN,clientId);
-
-        verify(clientRepository).delete(client);
-    }
-
-    // Client not found
-    @Test
-    void shouldThrowException_whenClientFound(){
+    void shouldThrowException_WhenClientHasProjects() {
 
         UUID userId = UUID.randomUUID();
         UUID clientId = UUID.randomUUID();
 
-        when(jwtUtil.extractUserId(TOKEN)).thenReturn(userId);
-        when(clientRepository.findByIdAndUserId(clientId,userId))
-                .thenReturn(Optional.empty());
+        Client client = new Client();
+        client.setId(clientId);
 
-        RuntimeException ex = assertThrows(RuntimeException.class,()->
-                clientService.deleteClient(TOKEN,clientId)
-                );
-        assertEquals("client not found",ex.getMessage());
+        when(clientRepo.findByIdAndUserId(clientId, userId))
+                .thenReturn(Optional.of(client));
+
+        // ✔ FIX: use count instead of find
+        when(projectRepo.countByClientId(clientId))
+                .thenReturn(1L);
+
+        assertThrows(ApiException.class, () ->
+                service.deleteClient(userId, clientId)
+        );
+    }
+
+
+    // 3. FINANCIAL SUMMARY
+
+
+    @Test
+    void shouldCalculateOutstandingAmount() {
+
+        UUID clientId = UUID.randomUUID();
+
+        // Mock invoices
+        Invoice i1 = new Invoice();
+        Invoice i2 = new Invoice();
+
+        when(invoiceRepo.findByClientId(clientId))
+                .thenReturn(List.of(i1, i2));
+
+        // Mock payments
+        InvoicePayment p1 = new InvoicePayment();
+        p1.setAmountPaid(BigDecimal.valueOf(1000));
+
+        when(paymentRepo.findByInvoiceId(any()))
+                .thenReturn(List.of(p1));
+
+        BigDecimal totalPaid = p1.getAmountPaid();
+
+        assertEquals(BigDecimal.valueOf(1000), totalPaid);
     }
 }

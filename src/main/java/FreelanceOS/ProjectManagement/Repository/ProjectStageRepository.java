@@ -1,6 +1,7 @@
 package FreelanceOS.ProjectManagement.Repository;
 
 import FreelanceOS.ProjectManagement.Entity.ProjectStage;
+import FreelanceOS.ProjectManagement.Enums.StageStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -16,4 +17,6 @@ public interface ProjectStageRepository extends JpaRepository<ProjectStage, UUID
     List<ProjectStage> findByProjectIdOrderByStageOrder(UUID projectId);
 
     Optional<ProjectStage> findByIdAndProject_Client_UserId(UUID stageId, UUID userId);
+
+    Optional<ProjectStage> findFirstByProjectIdAndStatus(UUID projectId, StageStatus status);
 }

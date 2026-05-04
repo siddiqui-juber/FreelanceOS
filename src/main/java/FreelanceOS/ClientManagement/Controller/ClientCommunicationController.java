@@ -1,80 +1,72 @@
 package FreelanceOS.ClientManagement.Controller;
 
-
 import FreelanceOS.ClientManagement.DTO.CommunicationResponse;
 import FreelanceOS.ClientManagement.DTO.CreateCommunicationRequest;
 import FreelanceOS.ClientManagement.Service.ClientCommunicationService;
+import FreelanceOS.Security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 @RestController
-@RequestMapping("/api/v1/clients/{id}/communications")
+@RequestMapping("/api/v1/clients/{clientId}/communications")
+@SecurityRequirement(name = "BearerAuth")
+@Tag(name = "Client Communication API", description = "Manage client communications")
 public class ClientCommunicationController {
 
     private final ClientCommunicationService communicationService;
 
     public ClientCommunicationController(ClientCommunicationService communicationService){
-        this.communicationService= communicationService;
-    }
-    private String extractToken(String header){
-        return header.replace("Bearer"," ").trim();
+        this.communicationService = communicationService;
     }
 
+    // CREATE
     @Operation(summary = "Add a communication entry to a client")
     @ApiResponses({
-            @ApiResponse(
-                    responseCode = "201",
-                    description = "Communication created",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = CommunicationResponse.class)
-                    )
-            ),
-            @ApiResponse(responseCode = "400", description = "Invalid input or invalid communication type"),
+            @ApiResponse(responseCode = "201", description = "Communication created",
+                    content = @Content(schema = @Schema(implementation = CommunicationResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid input"),
             @ApiResponse(responseCode = "404", description = "Client not found")
     })
     @PostMapping
-    public ResponseEntity<CommunicationResponse>addCommunication(
-            @RequestHeader ("Authorization") String header,
-            @PathVariable UUID id,
+    public ResponseEntity<CommunicationResponse> addCommunication(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID clientId,
             @RequestBody CreateCommunicationRequest request
-            ){
-        String token = extractToken(header);
-
-        return ResponseEntity.ok(communicationService.addCommunication(token,id,request));
+    ){
+        return ResponseEntity.status(201).body(
+                communicationService.addCommunication(user.getId(), clientId, request)
+        );
     }
 
+    //  GET
     @Operation(summary = "Get all communications for a client (newest first)")
     @ApiResponses({
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "List of communications",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = CommunicationResponse.class)
-                    )
-            ),
+            @ApiResponse(responseCode = "200", description = "List of communications"),
             @ApiResponse(responseCode = "404", description = "Client not found")
     })
     @GetMapping
     public ResponseEntity<List<CommunicationResponse>> getCommunication(
-            @RequestHeader("Authorization") String header,
-            @PathVariable UUID id
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID clientId
     ){
-        String token = extractToken(header);
-
-        return ResponseEntity.ok(communicationService.getCommunication(token,id));
+        return ResponseEntity.ok(
+                communicationService.getCommunication(user.getId(), clientId)
+        );
     }
 
+    //  DELETE
     @Operation(summary = "Delete a specific communication entry")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Communication deleted"),
@@ -82,12 +74,13 @@ public class ClientCommunicationController {
     })
     @DeleteMapping("/{commId}")
     public ResponseEntity<?> deleteCommunication(
-            @RequestHeader("Authorization")String header,
-            @PathVariable  UUID id,
-            @PathVariable UUID commId){
-        String token = header.replace("Bearer","").trim();
-        communicationService.deleteCommunication(token,id,commId);
-        return ResponseEntity.ok(Map.of("message", "Communication deleted successfully"));
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID clientId,
+            @PathVariable UUID commId
+    ){
+        communicationService.deleteCommunication(user.getId(), clientId, commId);
+        return ResponseEntity.ok(Map.of(
+                        "message", "Client Communication deleted successfully"
+                ));
     }
-
 }
