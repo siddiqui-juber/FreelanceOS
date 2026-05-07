@@ -137,12 +137,6 @@ mvn test
 - Client constraints
 - Status transitions
 
-## Postman Collection
-- Location in repo:
-```
-/postman/FreelanceOS_API.json
-```
-### Postman Coverage
 
 #### The collection includes:
 
