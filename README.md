@@ -137,7 +137,13 @@ mvn test
 - Client constraints
 - Status transitions
 
+## Postman Collection
 
+Location in repo:
+```
+https://siddique-jubair-s-team.postman.co/workspace/d87259a2-e843-4de0-aa56-d569d481772e/collection/47829931-6ef08f75-a2a7-445a-b998-8d8738f38aa6?action=share&source=copy-link&creator=47829931
+```
+## Postman Coverage
 #### The collection includes:
 
 #### All Modules
